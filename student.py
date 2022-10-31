@@ -32,12 +32,15 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                 )  # receive game update, this must be called timely or your game will get out of sync with the server
                 key = ""
                 #print(state)
-                car_coord = ""
+                redCar_coord = ""
+                notBlocked=True
                 grid_state = state.get("grid")
                 grid_state_edges = grid_state.split()
                 grid_state_parsed = list(grid_state_edges[1])
                 #print(grid_state_parsed)
                 grid_size = state.get("dimensions")
+                cursor = state.get("cursor")  
+                select = state.get("selected") 
                 i=0
                 grid = []
                 for y in range(grid_size[0]):
@@ -45,31 +48,37 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                     for x in range(grid_size[1]):
                         row.append(grid_state_parsed[i])
                         if grid_state_parsed[i] == "A":
-                            car_coord = [x,y]
+                            redCar_coord = [x,y]
+                        elif redCar_coord != "" and y == redCar_coord[1] and x == redCar_coord[0] + 1:
+                            if grid_state_parsed[i] != "A" and grid_state_parsed[i] != "o":
+                                notBlocked = False
+                                if cursor == redCar_coord and select != "":
+                                    key=" "
                         i=i+1
                     grid.append(row)
                 print(grid)   
-                cursor = state.get("cursor")  
-                select = state.get("selected") 
+               
                 print(cursor)
-                print(car_coord)
-                if select != "":
-                    key="d"
-                else:
-                    if cursor[0] > car_coord[0]:
-                        key="a" 
-                    if cursor[0] < car_coord[0]:
+                print(redCar_coord)
+                if notBlocked:
+                    if select != "":
                         key="d"
-                    if cursor[1] > car_coord[1]:
-                        key="w" 
-                    if cursor[1] < car_coord[1]:
-                        key="s"
-                    if cursor == car_coord:
-                        key=" "
+                    else:
+                        if cursor[0] > redCar_coord[0]:
+                            key="a" 
+                        if cursor[0] < redCar_coord[0]:
+                            key="d"
+                        if cursor[1] > redCar_coord[1]:
+                            key="w" 
+                        if cursor[1] < redCar_coord[1]:
+                            key="s"
+                        if cursor == redCar_coord:
+                            key=" "
                 await websocket.send(
                     json.dumps({"cmd": "key", "key": key})
                 )  # send key command to server - you must implement this send in the AI agent
-
+                #else:
+                    
                 # Next lines are only for the Human Agent, the key values are nonetheless the correct ones!
                 key = ""
                 for event in pygame.event.get():

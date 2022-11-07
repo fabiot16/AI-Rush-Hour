@@ -43,7 +43,8 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                 grid_state = state.get("grid")
                 grid_state_edges = grid_state.split()
                 grid_state_parsed = list(grid_state_edges[1])
-                #print(grid_state_parsed)
+                print("Grid state parsed:")
+                print(grid_state_parsed)
                 grid_size = state.get("dimensions")
                 cursor = state.get("cursor")  
                 select = state.get("selected") 
@@ -69,7 +70,9 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                                 otherCars[grid_state_parsed[i]] = [(x,y)]
                         i=i+1
                     grid.append(row)
-                print(grid)   
+                print("Grid:")
+                print(grid)
+                print("Other cars:")
                 print(otherCars)
                 #print(cursor)
                 #print(redCar_coord)
@@ -84,6 +87,8 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                 else:
                     if grid[redCar_coord[1]][redCar_coord[0]+1] in otherCars and jumps == 0: 
                         predecessors = [grid[redCar_coord[1]][redCar_coord[0]+1]]   
+                        print("Predecessors:")
+                        print(predecessors)
                         nextMove = nextStep(grid, otherCars, grid[redCar_coord[1]][redCar_coord[0]+1], (redCar_coord[0]+1, redCar_coord[1]), predecessors)
                         target = [nextMove[0][0], nextMove[0][1]]
                         direction = nextMove[1]
@@ -233,10 +238,163 @@ def nextStep(grid, otherCars, car, obs, predecessors):
         
         return None
 
+class Veiculo:
+    def __init__(self, state, x, y, length, orientation):
+        self.state = state
+        self.x = x
+        self.y = y
+        self.length = length
+        self.orientation = orientation
+        points = [] # Pode não ser necessário
 
+        if orientation == "Vertical":
+            x2 = self.x
+            y2 = self.y + self.length
 
+            for i in range(self.y,y2):
+                points.append([self.x,i])
 
+        else:
+            x2 = self.x + self.length
+            y2 = self.y
 
+            for i in range(self.x,x2):
+                points.append([i,y2])
+    
+    def update(self,direction):
+        if self.orientation == "Vertical":
+            if direction > 0:
+                self.y += 1
+                self.y2 += 1
+            else:
+                self.y -= 1
+                self.y2 -= 1
+        else:
+            if direction > 0:
+                self.x += 1
+                self.x2 += 1
+            else:
+                self.x -= 1
+                self.x2 -= 1
+
+        return None
+    def __str__(self):
+        return "[" + str(self.state) + " - " + "(" + str(self.x) + "," + str(self.y) + ") " + "(" + str(x2) + "," + str(y2) + ")" + ", " + str(self.length) + ", " + str(self.orientation) + "]"
+    
+    def __repr__(self):
+        return str(self)
+
+class SearchProblem:
+    def __init__(self, grid, initial):
+        self.grid = SearchNode(grid, initial)
+        self.initial = initial
+    
+    def goal_test(self,state):
+        return state.redCar.x == 6
+
+class SearchNode:
+    def __init__(self, state, parent, redCar, depth, heuristic, moveFromParent):
+        self.state = state
+        self.parent = parent
+        self.redCar = redCar
+        self.depth = depth
+        self.heuristic = heuristic
+        self.moveFromParent = moveFromParent # (id, +/-1)
+        
+    def add(self, v): # Pode não ser preciso
+        for p in v.points:
+            if self.state[p] != 'o':
+                return "Ponto ocupado!"
+        
+        for p in v.points:
+            self.state[p] = v.state
+        
+        return None
+
+    def remove(self, v): # Pode não ser preciso
+        for p in v.points:
+            self.state[p] = 'o'
+        return None
+
+    def move_vehicle(self, v, direction):
+        if v.orientation == "Vertical":
+            if direction > 0:
+                self.state[v.x][v.y] = 'o'
+                self.state[v.x][v.y2+1] = v.state
+            else:
+                self.state[v.x][v.y2] = 'o'
+                self.state[v.x][v.y-1] = v.state
+        else:
+            if direction > 0:
+                self.state[v.x][v.y] = 'o'
+                self.state[v.x2+1][v.y] = v.state
+            else:
+                self.state[v.x2][v.y] = 'o'
+                self.state[v.x-1][v.y] = v.state
+
+        v.update(direction)
+        return None
+    
+    def can_move(self, v, direction):
+        if v.orientation == "Vertical":
+            if direction and v.y2 < 6 and self.state[v.x][v.y2+1] == 'o':
+                return True
+            elif v.y > 1 and self.state[v.x][v.y-1] == 'o':
+                return True
+        else:
+            if direction and v.x2 < 6 and self.state[v.x2+1][v.y] == 'o':
+                return True
+            elif v.x > 1 and self.state[v.x-1][v.y] == 'o':
+                return True
+        return False
+
+    def next_moves(self, state): #falta desenvolver
+        return None
+
+    def __str__(self):
+        return "[" + str(self.state) + " - " + "(" + str(self.x) + "," + str(self.y) + ") " + "(" + str(x2) + "," + str(y2) + ")" + ", " + str(self.length) + ", " + str(self.orientation) + "]"
+    
+    def __repr__(self):
+        return str(self)
+
+class SearchTree:
+    def __init__(self, problem):
+        self.problem = problem
+        root = SearchNode(problem.grid, None, problem.initial, 0, 0) # Falta heuristica
+        self.open_nodes = [root]
+        self.closed_nodes = []
+        self.solution = None
+        redCar = problem.initial
+    
+    def get_moves(self, node): 
+        if node.parent == self.root:
+            return []
+        moves = self.get_moves(node.parent)
+        moves += [node.moveFromParent]
+        return (moves)
+
+    def search(self):
+        while self.open_nodes != []:
+            node = self.open_nodes.pop()
+            
+            if self.problem.goal_test(node):
+                self.solution = node
+                return self.get_moves(node)
+            lnewnodes = []
+            for child in self.problem.domain.next_moves(node):
+                h = self.problem.heuristic(child)
+                if node in self.closed_nodes:
+                    continue
+                child.parent = node
+                child.depth += 1
+                child.heuristic = h
+                lnewnodes.append(child)
+            self.add_to_open(lnewnodes)
+        return None
+
+    def add_to_open(self,lnewnodes):
+        self.open_nodes.extend(lnewnodes)
+        self.open_nodes.sort(key = lambda node: node.heuristic + node.depth)
 
 # DO NOT CHANGE THE LINES BELLOW
 # You can change the default values using the command line, example:

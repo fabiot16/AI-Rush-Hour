@@ -43,8 +43,14 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                 grid_state = state.get("grid")
                 grid_state_edges = grid_state.split()
                 grid_state_parsed = list(grid_state_edges[1])
+                print("Grid state:")
+                print(grid_state)
+                print("Grid state edges:")
+                print(grid_state_edges)
                 print("Grid state parsed:")
                 print(grid_state_parsed)
+                print("generate_info:")
+                generate_info(grid_state)
                 grid_size = state.get("dimensions")
                 cursor = state.get("cursor")  
                 select = state.get("selected") 
@@ -238,121 +244,169 @@ def nextStep(grid, otherCars, car, obs, predecessors):
         
         return None
 
+def generate_info(grid):
+    grid_state = grid.split()
+    num_v = grid_state[0]
+    grid_state_parsed = list(grid_state[1])
+    bidimensional_grid = [grid_state_parsed[e:e+6] for e in range(0,36,6)]
+    veiculos = []
+    veiculos_found = []
+
+    for y in range(0,6):
+        if bidimensional_grid[y].count('o') != 6:
+            for x in range(0,6):
+                if x < 5 and bidimensional_grid[y][x] != 'o' and (bidimensional_grid[y][x] == bidimensional_grid[y][x+1]) and bidimensional_grid[y][x] not in veiculos_found:
+                    veiculos_found.append(bidimensional_grid[y][x])
+                    orientation = 'Horizontal'
+                    length = grid_state_parsed.count(bidimensional_grid[y][x])
+                    veiculos.append(Veiculo(bidimensional_grid[y][x], x, y, length, orientation))
+
+                elif x < 6 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] not in veiculos_found:
+                    veiculos_found.append(bidimensional_grid[y][x])
+                    orientation = 'Vertical'
+                    length = grid_state_parsed.count(bidimensional_grid[y][x])
+                    veiculos.append(Veiculo(bidimensional_grid[y][x], x, y, length, orientation))
+    
+    veiculos.sort(key = lambda v: v.id)
+    print(veiculos)
+    return [bidimensional_grid, num_v, veiculos]
+
 class Veiculo:
-    def __init__(self, state, x, y, length, orientation):
-        self.state = state
-        self.x = x
-        self.y = y
+    def __init__(self, identification, x1, y1, length, orientation):
+        self.id = identification
+        self.x1 = x1
+        self.y1 = y1
         self.length = length
         self.orientation = orientation
-        points = [] # Pode não ser necessário
+        points = []
 
         if orientation == "Vertical":
-            x2 = self.x
-            y2 = self.y + self.length
+            self.x2 = self.x1
+            self.y2 = self.y1 + self.length-1
 
-            for i in range(self.y,y2):
-                points.append([self.x,i])
+            for i in range(self.y1,self.y2):
+                points.append([self.x1,i])
 
         else:
-            x2 = self.x + self.length
-            y2 = self.y
+            self.x2 = self.x1 + self.length-1
+            self.y2 = self.y1
 
-            for i in range(self.x,x2):
-                points.append([i,y2])
+            for i in range(self.x1,self.x2):
+                points.append([i,self.y2])
     
-    def update(self,direction):
-        if self.orientation == "Vertical":
-            if direction > 0:
-                self.y += 1
-                self.y2 += 1
-            else:
-                self.y -= 1
-                self.y2 -= 1
-        else:
-            if direction > 0:
-                self.x += 1
-                self.x2 += 1
-            else:
-                self.x -= 1
-                self.x2 -= 1
-
         return None
+
     def __str__(self):
-        return "[" + str(self.state) + " - " + "(" + str(self.x) + "," + str(self.y) + ") " + "(" + str(x2) + "," + str(y2) + ")" + ", " + str(self.length) + ", " + str(self.orientation) + "]"
+        return "[" + str(self.id) + " - " + "(" + str(self.x1) + "," + str(self.y1) + ") " + "(" + str(self.x2) + "," + str(self.y2) + ")" + ", " + str(self.length) + ", " + str(self.orientation) + "]"
     
     def __repr__(self):
         return str(self)
 
 class SearchProblem:
-    def __init__(self, grid, initial):
-        self.grid = SearchNode(grid, initial)
-        self.initial = initial
+    def __init__(self, info):
+        grid, num_v, veiculos = info
+        self.grid = SearchNode(grid, None, veiculos, 0, 0, None)
+        self.red_car = veiculos[0]
+        self.num_v = num_v
     
     def goal_test(self,state):
-        return state.redCar.x == 6
+        return state.red_car.x2 == 5
 
 class SearchNode:
-    def __init__(self, state, parent, redCar, depth, heuristic, moveFromParent):
+    def __init__(self, state, parent, veiculos, depth, heuristic, moveFromParent):
         self.state = state
         self.parent = parent
-        self.redCar = redCar
+        self.red_car = veiculos[0]
+        self.veiculos = veiculos
         self.depth = depth
         self.heuristic = heuristic
         self.moveFromParent = moveFromParent # (id, +/-1)
         
-    def add(self, v): # Pode não ser preciso
+    def add(self, v):
         for p in v.points:
-            if self.state[p] != 'o':
-                return "Ponto ocupado!"
-        
-        for p in v.points:
-            self.state[p] = v.state
+            x,y = p
+            self.state[y][x] = v.id
         
         return None
 
-    def remove(self, v): # Pode não ser preciso
+    def remove(self, v):
         for p in v.points:
-            self.state[p] = 'o'
+            x,y = p
+            self.state[y][x] = 'o'
         return None
 
     def move_vehicle(self, v, direction):
         if v.orientation == "Vertical":
             if direction > 0:
-                self.state[v.x][v.y] = 'o'
-                self.state[v.x][v.y2+1] = v.state
+                self.state[v.y2][v.x1] = 'o'
+                self.state[v.y1-1][v.x1] = v.state
             else:
-                self.state[v.x][v.y2] = 'o'
-                self.state[v.x][v.y-1] = v.state
+                self.state[v.y1][v.x1] = 'o'
+                self.state[v.y2+1][v.x1] = v.state
         else:
             if direction > 0:
-                self.state[v.x][v.y] = 'o'
-                self.state[v.x2+1][v.y] = v.state
+                self.state[v.y1][v.x1] = 'o'
+                self.state[v.y2][v.x2+1] = v.state
             else:
-                self.state[v.x2][v.y] = 'o'
-                self.state[v.x-1][v.y] = v.state
+                self.state[v.y1][v.x2] = 'o'
+                self.state[v.y2][v.x1-1] = v.state
 
-        v.update(direction)
         return None
     
     def can_move(self, v, direction):
         if v.orientation == "Vertical":
-            if direction and v.y2 < 6 and self.state[v.x][v.y2+1] == 'o':
+            if direction > 0 and v.y1 > 0 and self.state[v.y1-1][v.x1] == 'o':
                 return True
-            elif v.y > 1 and self.state[v.x][v.y-1] == 'o':
+            elif v.y2 < 5 and self.state[v.y2+1][v.x1] == 'o':
                 return True
         else:
-            if direction and v.x2 < 6 and self.state[v.x2+1][v.y] == 'o':
+            if direction > 0 and v.x2 < 5 and self.state[v.y1][v.x2+1] == 'o':
                 return True
-            elif v.x > 1 and self.state[v.x-1][v.y] == 'o':
+            elif v.x1 > 0 and self.state[v.y1][v.x1-1] == 'o':
                 return True
         return False
 
-    def next_moves(self, state): #falta desenvolver
-        return None
+    def next_moves(self):
+        veiculos = self.veiculos
+        moves = []
+
+        for v in veiculos:
+            move = SearchNode(self.state,self,self.veiculos,self.depth+1, h, None)
+            if self.can_move(v,1):
+                if v.orientation == 'Vertical':
+                    move.remove(v)
+                    temp = Veiculo(v.id, v.x1, v.y1-1, v.length, v.orientation)
+                    move.add(temp)
+                    move.move_vehicle(v,1)
+                    move.moveFromParent = (v.id,1)
+                    moves.append(move)
+                else:
+                    move.remove(v)
+                    temp = Veiculo(v.id, v.x1+1, v.y1, v.length, v.orientation)
+                    move.add(temp)
+                    move.move_vehicle(v,1)
+                    move.moveFromParent = (v.id,1)
+                    moves.append(move)
+            if self.can_move(v,-1):
+                if v.orientation == 'Vertical':
+                    move.remove(v)
+                    temp = Veiculo(v.id, v.x1, v.y1+1, v.length, v.orientation)
+                    move.add(temp)
+                    move.move_vehicle(v,1)
+                    move.moveFromParent = (v.id,1)
+                    moves.append(move)
+                else:
+                    move.remove(v)
+                    temp = Veiculo(v.id, v.x1-1, v.y1, v.length, v.orientation)
+                    move.add(temp)
+                    move.move_vehicle(v,1)
+                    move.moveFromParent = (v.id,1)
+                    moves.append(move)
+
+        return moves
 
     def __str__(self):
-        return "[" + str(self.state) + " - " + "(" + str(self.x) + "," + str(self.y) + ") " + "(" + str(x2) + "," + str(y2) + ")" + ", " + str(self.length) + ", " + str(self.orientation) + "]"
+        return "State:\n " + str(self.state) + "\nParent:\n" + str(self.parent) + "\nRed Car: " + str(self.red_car) + "\nVeiculos: " + str(self.veiculos) + "\nDepth: " + str(self.depth) + "\nHeuristic: " + str(self.heuristic) + "\nMove from parent: " + str(self.moveFromParent)
     
     def __repr__(self):
         return str(self)
@@ -360,11 +414,11 @@ class SearchNode:
 class SearchTree:
     def __init__(self, problem):
         self.problem = problem
-        root = SearchNode(problem.grid, None, problem.initial, 0, 0) # Falta heuristica
+        root = problem.grid # Falta heuristica
         self.open_nodes = [root]
         self.closed_nodes = []
         self.solution = None
-        redCar = problem.initial
+        red_car = problem.red_car
     
     def get_moves(self, node): 
         if node.parent == self.root:

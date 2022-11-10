@@ -114,13 +114,13 @@ def generate_info(grid):
     for y in range(0,6):
         if bidimensional_grid[y].count('o') != 6:
             for x in range(0,6):
-                if x < 5 and bidimensional_grid[y][x] != 'o' and (bidimensional_grid[y][x] == bidimensional_grid[y][x+1]) and bidimensional_grid[y][x] not in veiculos_found:
+                if x < 5 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] != 'x' and (bidimensional_grid[y][x] == bidimensional_grid[y][x+1]) and bidimensional_grid[y][x] not in veiculos_found:
                     veiculos_found.append(bidimensional_grid[y][x])
                     orientation = 'Horizontal'
                     length = grid_state_parsed.count(bidimensional_grid[y][x])
                     veiculos.append(Veiculo(bidimensional_grid[y][x], x, y, length, orientation))
 
-                elif x < 6 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] not in veiculos_found:
+                elif x < 6 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] != 'x' and bidimensional_grid[y][x] not in veiculos_found:
                     veiculos_found.append(bidimensional_grid[y][x])
                     orientation = 'Vertical'
                     length = grid_state_parsed.count(bidimensional_grid[y][x])
@@ -221,12 +221,12 @@ class SearchNode:
         if v.orientation == "Vertical":
             if direction > 0 and v.y1 > 0 and self.state[v.y1-1][v.x1] == 'o':
                 return True
-            elif v.y2 < 5 and self.state[v.y2+1][v.x1] == 'o':
+            elif direction < 0 and v.y2 < 5 and self.state[v.y2+1][v.x1] == 'o':
                 return True
         else:
             if direction > 0 and v.x2 < 5 and self.state[v.y1][v.x2+1] == 'o':
                 return True
-            elif v.x1 > 0 and self.state[v.y1][v.x1-1] == 'o':
+            elif direction < 0 and v.x1 > 0 and self.state[v.y1][v.x1-1] == 'o':
                 return True
         return False
 
@@ -235,38 +235,38 @@ class SearchNode:
             if self.can_move(v,1):
                 move1 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, None, None)
                 if v.orientation == 'Vertical':
-                    move1.remove(v)
+                    #move1.remove(v)
                     temp = Veiculo(v.id, v.x1, v.y1-1, v.length, v.orientation)
-                    move1.add(temp)
-                    #move.move_vehicle(v,1)
+                    #move1.add(temp)
+                    move1.move_vehicle(v,1)
                     move1.updateV(temp)
                     move1.moveFromParent = (v.id, v.x1, v.y1,"w")
                     yield move1
                     #print("move:")
                     #print(move)
                 else:
-                    move1.remove(v)
+                    #move1.remove(v)
                     temp = Veiculo(v.id, v.x1+1, v.y1, v.length, v.orientation)
-                    move1.add(temp)
-                    #move.move_vehicle(v,1)
+                    #move1.add(temp)
+                    move1.move_vehicle(v,1)
                     move1.updateV(temp)
                     move1.moveFromParent = (v.id, v.x1, v.y1,"d")
                     yield move1
             if self.can_move(v,-1):
                 move2 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, None, None)
                 if v.orientation == 'Vertical':
-                    move2.remove(v)
+                    #move2.remove(v)
                     temp = Veiculo(v.id, v.x1, v.y1+1, v.length, v.orientation)
-                    move2.add(temp)
-                    #move.move_vehicle(v,-1)
+                    #move2.add(temp)
+                    move2.move_vehicle(v,-1)
                     move2.updateV(temp)
                     move2.moveFromParent = (v.id, v.x1, v.y1,"s")
                     yield move2
                 else:
-                    move2.remove(v)
+                    #move2.remove(v)
                     temp = Veiculo(v.id, v.x1-1, v.y1, v.length, v.orientation)
-                    move2.add(temp)
-                    #move.move_vehicle(v,-1)
+                    #move2.add(temp)
+                    move2.move_vehicle(v,-1)
                     move2.updateV(temp)
                     move2.moveFromParent = (v.id, v.x1, v.y1,"a")
                     yield move2
@@ -298,8 +298,8 @@ class SearchNode:
 class SearchTree:
     def __init__(self, problem):
         self.problem = problem
-        root = problem.grid
-        self.open_nodes = [root]
+        self.root = problem.grid
+        self.open_nodes = [self.root]
         self.closed_nodes = []
         self.solution = None
     
@@ -310,7 +310,7 @@ class SearchTree:
         moves += [node.moveFromParent]
         return moves
 
-    def search(self):
+    def search(self, limit = 18):
         while self.open_nodes != []:
             #print("OPEN-------------------NODES")
             #print(self.open_nodes)
@@ -318,8 +318,9 @@ class SearchTree:
             self.closed_nodes.append(bidimensional_array_to_string(node.state))
             #print("-----NOVO NODE-----")
             #print(node)
-            if node.goal_test():
-                #print("DONE----------------------------------")
+            if node.goal_test() and node.depth <= limit:
+                print("DONE----------------------------------")
+                print(node.depth)
                 self.solution = node
                 return self.get_moves(node)
             lnewnodes = []

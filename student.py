@@ -278,7 +278,6 @@ def generate_info(grid):
                     veiculos.append(Veiculo(bidimensional_grid[y][x], x, y, length, orientation))
     
     veiculos.sort(key = lambda v: v.id)
-    print(veiculos)
     return [bidimensional_grid, num_v, veiculos]
 
 class Veiculo:
@@ -386,7 +385,7 @@ class SearchNode:
     def next_moves(self):
         for v in self.veiculos:
             if self.can_move(v,1):
-                move1 = SearchNode(copy.deepcopy(self.state),self,self.veiculos,self.depth+1, None, None)
+                move1 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, None, None)
                 if v.orientation == 'Vertical':
                     move1.remove(v)
                     temp = Veiculo(v.id, v.x1, v.y1-1, v.length, v.orientation)
@@ -406,7 +405,7 @@ class SearchNode:
                     move1.moveFromParent = (v.id,1)
                     yield move1
             if self.can_move(v,-1):
-                move2 = SearchNode(copy.deepcopy(self.state),self,self.veiculos,self.depth+1, None, None)
+                move2 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, None, None)
                 if v.orientation == 'Vertical':
                     move2.remove(v)
                     temp = Veiculo(v.id, v.x1, v.y1+1, v.length, v.orientation)
@@ -457,7 +456,7 @@ class SearchTree:
         self.solution = None
     
     def get_moves(self, node): 
-        if node.parent == self.root:
+        if node.depth == 0:
             return []
         moves = self.get_moves(node.parent)
         moves += [node.moveFromParent]

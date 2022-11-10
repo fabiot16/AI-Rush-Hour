@@ -4,6 +4,7 @@ from calendar import c
 import getpass
 import json
 import os
+import copy
 
 # Next 4 lines are not needed for AI agents, please remove them from your code!
 import pygame
@@ -383,13 +384,9 @@ class SearchNode:
         return False
 
     def next_moves(self):
-        moves = []
-
         for v in self.veiculos:
             if self.can_move(v,1):
-                move1 = SearchNode(self.state,self,self.veiculos,self.depth+1, None, None)
-                print("move1state")
-                print(move1.state)
+                move1 = SearchNode(copy.deepcopy(self.state),self,self.veiculos,self.depth+1, None, None)
                 if v.orientation == 'Vertical':
                     move1.remove(v)
                     temp = Veiculo(v.id, v.x1, v.y1-1, v.length, v.orientation)
@@ -397,27 +394,19 @@ class SearchNode:
                     #move.move_vehicle(v,1)
                     move1.updateV(temp)
                     move1.moveFromParent = (v.id,1)
-                    moves.append(move1)
+                    yield move1
                     #print("move:")
                     #print(move)
                 else:
                     move1.remove(v)
-                    print("remove")
-                    print(move1.state)
                     temp = Veiculo(v.id, v.x1+1, v.y1, v.length, v.orientation)
                     move1.add(temp)
-                    print("add")
-                    print(move1.state)
                     #move.move_vehicle(v,1)
                     move1.updateV(temp)
                     move1.moveFromParent = (v.id,1)
                     yield move1
-                    #print("move:")
-                    #print(move)
             if self.can_move(v,-1):
-                move2 = SearchNode(self.state,self,self.veiculos,self.depth+1, None, None)
-                print("move2state")
-                print(move2.state)
+                move2 = SearchNode(copy.deepcopy(self.state),self,self.veiculos,self.depth+1, None, None)
                 if v.orientation == 'Vertical':
                     move2.remove(v)
                     temp = Veiculo(v.id, v.x1, v.y1+1, v.length, v.orientation)
@@ -425,26 +414,15 @@ class SearchNode:
                     #move.move_vehicle(v,-1)
                     move2.updateV(temp)
                     move2.moveFromParent = (v.id,-1)
-                    moves.append(move2)
-                    #print("move:")
-                    #print(move)
+                    yield move2
                 else:
                     move2.remove(v)
-                    print("remove")
-                    print(move2.state)
                     temp = Veiculo(v.id, v.x1-1, v.y1, v.length, v.orientation)
                     move2.add(temp)
-                    print("add")
-                    print(move2.state)
                     #move.move_vehicle(v,-1)
                     move2.updateV(temp)
                     move2.moveFromParent = (v.id,-1)
                     yield move2
-                    #print("move:")
-                    #print(move)
-        #print("moves:")
-        #print(moves)
-        #return moves
     
     def calcHeuristic(self):
         goal_row = self.state[2]
@@ -487,26 +465,31 @@ class SearchTree:
 
     def search(self):
         while self.open_nodes != []:
+            print("OPEN-------------------NODES")
+            print(self.open_nodes)
             node = self.open_nodes.pop()
             self.closed_nodes.append(bidimensional_array_to_string(node.state))
-            #print("-----NOVO NODE-----")
-            #print(node)
-            #print("closed_nodes:")
-            #print(self.closed_nodes)
+            print("-----NOVO NODE-----")
+            print(node)
             if node.goal_test():
+                print("DONE----------------------------------")
                 self.solution = node
                 return self.get_moves(node)
             lnewnodes = []
             for child in node.next_moves():
                 if bidimensional_array_to_string(child.state) not in self.closed_nodes:
-                    child.heuristic = child.calcHeuristic
-                    #print("-----CHILD-----")
-                    #print(child)
+                    child.heuristic = child.calcHeuristic()
+                    print("-----CHILD-----")
+                    print(child)
                     lnewnodes.append(child)
+                    print("lnewnoode::::::::.")
+                    print(lnewnodes)
             self.add_to_open(lnewnodes)
         return None
 
     def add_to_open(self,lnewnodes):
+        print("on open")
+        print(lnewnodes)
         self.open_nodes.extend(lnewnodes)
         self.open_nodes.sort(key = lambda node: node.heuristic + node.depth)
     

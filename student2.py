@@ -25,16 +25,18 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
         SPRITES = pygame.image.load("data/pad.png").convert_alpha()
         SCREEN.blit(SPRITES, (0, 0))
         
-        
+        target=""
+        direction=""
+        jumps=0 
+        previous_cursor = ""
+        error_count=0
         while True:
             try:
                 state = json.loads(
                     await websocket.recv()
                 )  # receive game update, this must be called timely or your game will get out of sync with the server
                 key = ""
-                target=""
-                direction=""
-                jumps=0
+                
                 #print(state)
                 Cars = {}
                 blocker=""
@@ -75,21 +77,28 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                 #print(cursor)
                 #print(redCar_coord)
                 #print(jumps)
-                if grid[redCar_coord[1]][redCar_coord[0] + 1] == "o":
-                    notBlocked = True
+                #if grid[redCar_coord[1]][redCar_coord[0] + 1] == "o":
+                    #notBlocked = True
+                if previous_cursor == cursor:
+                        error_count +=1
+                        if error_count == 6:
+                            jumps=0
+                            error_count=0
+                previous_cursor = cursor
                 if notBlocked:
                     target = redCar_coord
                     direction = "d"
                     
                     
                 else:
-                    predecessors = [grid[blocker[1]][blocker[0]]]   
-                    nextMove = nextStep(grid, Cars, grid[blocker[1]][blocker[0]], (blocker[0], blocker[1]), predecessors)
-                    if nextMove != None:
-                        target = [nextMove[0][0], nextMove[0][1]]
-                        direction = nextMove[1]
-                        jumps = nextMove[2]
-                    print(nextMove)
+                    if jumps == 0:
+                        predecessors = [grid[blocker[1]][blocker[0]]]   
+                        nextMove = nextStep(grid, Cars, grid[blocker[1]][blocker[0]], (blocker[0], blocker[1]), predecessors)
+                        if nextMove != None:
+                            target = [nextMove[0][0], nextMove[0][1]]
+                            direction = nextMove[1]
+                            jumps = nextMove[2]
+                        print(nextMove)
                 if target != "" and cursor != target: 
                     if select != "":
                          key = " "
@@ -175,17 +184,14 @@ def nextStep(grid, Cars, car, obs, predecessors):
                 for tempy in range(1, size+1):
                     if positions[0][1] - tempy >= 0: 
                         if grid[positions[0][1] - tempy][x] != "o":
-                            if grid[positions[0][1] - tempy][x] == "x" or grid[positions[0][1] - tempy][x] == "A":
+                            if grid[positions[0][1] - tempy][x] == "x":
                                 break
-                            if grid[positions[0][1] - tempy][x] in Cars and grid[positions[0][1] - tempy][x] != car and grid[positions[0][1] - tempy][x] not in predecessors:
-                                next_predecessors = predecessors + [grid[positions[0][1] - tempy][x]]
-                                next = nextStep(grid, Cars, grid[positions[0][1] - tempy][x],(x, positions[0][1] -tempy), next_predecessors)
-                                if next:
-                                    return next
                         else:
                             count +=1
-                if count == size:  
-                    return (positions[0], "w", size)
+                            if count == size:  
+                                return (positions[0], "w", size)
+                                
+                
                         
                         
             if positions[-1][1] + 1 < len(grid):
@@ -193,18 +199,43 @@ def nextStep(grid, Cars, car, obs, predecessors):
                 for tempy in range(1, size+1):
                     if positions[-1][1] + tempy < len(grid):
                         if grid[positions[-1][1] + tempy][x] != "o":
-                            if grid[positions[-1][1] + tempy][x] == "x" or grid[positions[-1][1] + tempy][x] == "A":
+                            if grid[positions[-1][1] + tempy][x] == "x":
+                                break
+                        else:
+                            count +=1
+                            if count == size:  
+                                return (positions[-1], "s", size)
+                    
+                        
+            if positions[0][1] - 1 >= 0:
+               for tempy in range(1, size+1):
+                if positions[0][1] - tempy >= 0: 
+                    if grid[positions[0][1] - tempy][x] != "o":
+                        if grid[positions[0][1] - tempy][x] == "x":
+                            break
+                        if grid[positions[0][1] - tempy][x] in Cars and grid[positions[0][1] - tempy][x] != car and grid[positions[0][1] - tempy][x] not in predecessors:
+                            next_predecessors = predecessors + [grid[positions[0][1] - tempy][x]]
+                            next = nextStep(grid, Cars, grid[positions[0][1] - tempy][x],(x, positions[0][1] -tempy), next_predecessors)
+                            if next:
+                                return next    
+                    
+                    
+                    
+            if positions[-1][1] + 1 < len(grid):
+                for tempy in range(1, size+1):
+                    if positions[-1][1] + tempy < len(grid):
+                        if grid[positions[-1][1] + tempy][x] != "o":
+                            if grid[positions[-1][1] + tempy][x] == "x":
                                 break
                             if grid[positions[-1][1] +tempy][x] in Cars and grid[positions[-1][1] +tempy][x] != car and grid[positions[-1][1] +tempy][x] not in predecessors:
                                 next_predecessors = predecessors + [grid[positions[-1][1] +tempy][x]]
                                 next = nextStep(grid, Cars, grid[positions[-1][1] +tempy][x], (x, positions[-1][1] +tempy), next_predecessors)
                                 if next:
                                     return next
-                        else:
-                            count +=1
-                if count == size:  
-                    return (positions[-1], "s", size)
-                    
+                        
+                        
+                        
+                        
                         
     
         if positions[0][1] - positions[-1][1] == 0:
@@ -223,17 +254,12 @@ def nextStep(grid, Cars, car, obs, predecessors):
                 for tempx in range(1, size+1):
                     if positions[-1][0] + tempx < len(grid[y]):
                         if grid[y][positions[-1][0] + tempx] != "o":
-                            if grid[y][positions[-1][0] + tempx] == "x" or grid[y][positions[-1][0] + tempx] == "A":
+                            if grid[y][positions[-1][0] + tempx] == "x":
                                 break
-                            if grid[y][positions[-1][0] + tempx] in Cars and  grid[y][positions[-1][0] + tempx] != car and grid[y][positions[-1][0] + tempx] not in predecessors:
-                                next_predecessors = predecessors + [grid[y][positions[-1][0] + tempx]]
-                                next = nextStep(grid, Cars, grid[y][positions[-1][0] + tempx], (positions[-1][0] + tempx, y), next_predecessors)
-                                if next:
-                                    return next
                         else:
                             count +=1
-                if count == size:  
-                    return (positions[-1], "d", size)
+                            if count == size:  
+                                return (positions[-1], "d", size)
 
                             
                             
@@ -243,17 +269,40 @@ def nextStep(grid, Cars, car, obs, predecessors):
                 for tempx in range(1, size+1):
                     if positions[0][0] - tempx >= 0: 
                         if grid[y][positions[0][0] - tempx] != "o":
-                            if grid[y][positions[0][0] - tempx] == "x" or grid[y][positions[0][0] - tempx] == "A":
+                            if grid[y][positions[0][0] - tempx] == "x":
+                                break
+                        else:
+                            count +=1
+                            if count == size:  
+                                return (positions[0], "a", size)  
+                                
+                                
+                                
+                                
+            if positions[-1][0] + 1 < len(grid[y]):
+                for tempx in range(1, size+1):
+                    if positions[-1][0] + tempx < len(grid[y]):
+                        if grid[y][positions[-1][0] + tempx] != "o":
+                            if grid[y][positions[-1][0] + tempx] == "x":
+                                break
+                            if grid[y][positions[-1][0] + tempx] in Cars and  grid[y][positions[-1][0] + tempx] != car and grid[y][positions[-1][0] + tempx] not in predecessors:
+                                next_predecessors = predecessors + [grid[y][positions[-1][0] + tempx]]
+                                next = nextStep(grid, Cars, grid[y][positions[-1][0] + tempx], (positions[-1][0] + tempx, y), next_predecessors)
+                                if next:
+                                    return next
+                                    
+                                    
+            if positions[0][0] - 1 >= 0:
+                for tempx in range(1, size+1):
+                    if positions[0][0] - tempx >= 0: 
+                        if grid[y][positions[0][0] - tempx] != "o":
+                            if grid[y][positions[0][0] - tempx] == "x":
                                 break
                             if grid[y][positions[0][0] - tempx] in Cars and grid[y][positions[0][0] - tempx] != car and grid[y][positions[0][0] - tempx] not in predecessors:
                                 next_predecessors = predecessors + [grid[y][positions[0][0] - tempx]]
                                 next = nextStep(grid, Cars, grid[y][positions[0][0] - tempx], (positions[0][0] - tempx, y), next_predecessors)
                                 if next:
                                     return next
-                        else:
-                            count +=1
-                if count == size:  
-                    return (positions[0], "a", size)  
 
         
         return None

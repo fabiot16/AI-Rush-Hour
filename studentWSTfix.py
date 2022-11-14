@@ -5,6 +5,7 @@ import getpass
 import json
 import os
 import copy
+import time
 
 # Next 4 lines are not needed for AI agents, please remove them from your code!
 import pygame
@@ -29,45 +30,118 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
         
         target=""
         direction=""
-        jumps=0
+        key = ""
+        next_moves = []
+        state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+        grid_state = state.get("grid")
+        cursor = state.get("cursor")
+        select = state.get("selected")
+
         while True:
             try:
-                state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-                key = ""
-                grid_state = state.get("grid")
-                next_moves = []
-                # Search Tree resolution
+                if next_moves == []:
+                    state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                    grid_state = state.get("grid")
+                    cursor = state.get("cursor")
+                    select = state.get("selected")
 
-                problem = SearchProblem(generate_info(grid_state))
-                t = SearchTree(problem)
-                next_moves = t.search()
-                print(next_moves)
-
-                cursor = state.get("cursor")
-                select = state.get("selected")
-                move = next_moves.pop(0)
-                print(move)
-
-                target = [move[1], move[2]]
-                direction = move[3]
-
-                if target != "" and cursor != target:
-                    if select != "":
-                        key = " "
-                    elif cursor[0] > target[0]:
-                        key = "a" 
-                    elif cursor[0] < target[0]:
-                        key = "d"
-                    elif cursor[1] > target[1]:
-                        key = "w"
-                    elif cursor[1] < target[1]:
-                        key = "s"
+                    t0 = time.process_time()
+                    problem = SearchProblem(generate_info(grid_state))
+                    t = SearchTree(problem)
+                    next_moves = t.search()
+                    print("Time:",time.process_time()-t0)
+                    print(next_moves)
                     
-                if select != "" and cursor == target:
-                    key = direction
-                elif cursor == target:
-                    key=" "
-                await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agent
+                elif next_moves != []:
+                    while next_moves != []:
+                        move = next_moves.pop(0)
+                        print(move)
+                        target = [move[1], move[2]]
+                        direction = move[3]
+
+                        while cursor != target:
+                            state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                            grid_state = state.get("grid")
+                            compare = grid_state[1]
+                            cursor = state.get("cursor")
+                            select = state.get("selected")
+                            print("grid compare")
+                            print(compare)
+                            print("move compare")
+                            #print(move[4])
+                            if compare != move[4]:
+                                print("Crazy driver")
+                                state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                                grid_state = state.get("grid")
+                                cursor = state.get("cursor")
+                                select = state.get("selected")
+
+                                t0 = time.process_time()
+                                problem = SearchProblem(generate_info(grid_state))
+                                t = SearchTree(problem)
+                                next_moves = t.search()
+                                print("Time:",time.process_time()-t0)
+                                print(next_moves)
+                                move = next_moves.pop(0)
+                                print(move)
+                                target = [move[1], move[2]]
+                                direction = move[3]
+                            
+                            if target != "" and cursor != target:
+                                if cursor[0] > target[0]:
+                                    key = "a" 
+                                elif cursor[0] < target[0]:
+                                    key = "d"
+                                elif cursor[1] > target[1]:
+                                    key = "w"
+                                elif cursor[1] < target[1]:
+                                    key = "s"
+                            await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agent
+                            state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                            grid_state = state.get("grid")
+                            cursor = state.get("cursor")
+                            select = state.get("selected")
+                            
+                        print(grid_state[1])
+                        print(move[5])
+                        while grid_state[1] != move[5]:
+                            select = state.get("selected")
+                            if select != "" and cursor == target:
+                                key = direction
+                            elif cursor == target:
+                                key=" "
+                            await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                            state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                            grid_state = state.get("grid")
+                            cursor = state.get("cursor")
+                            select = state.get("selected")
+                #while next_moves == []:
+                    #await websocket.send(json.dumps({"cmd": "key", "key": " "}))  # send key command to server - you must implement this send in the AI agent
+
+                
+
+                
+                
+
+                
+
+                #if target != "" and cursor != target:
+                #    if select != "":
+                #        key = " "
+                #    elif cursor[0] > target[0]:
+                #        key = "a" 
+                #    elif cursor[0] < target[0]:
+                #        key = "d"
+                #    elif cursor[1] > target[1]:
+                #        key = "w"
+                #    elif cursor[1] < target[1]:
+                #        key = "s"
+                    
+                #if select != "" and cursor == target:
+                #    key = direction
+                #elif cursor == target:
+                #    key=" "
+                #await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agent
 
                 # Next lines are only for the Human Agent, the key values are nonetheless the correct ones!
                 key = ""
@@ -163,6 +237,7 @@ class SearchProblem:
     def __init__(self, info):
         grid, num_v, veiculos = info
         self.grid = SearchNode(grid, None, veiculos, 0, None, None)
+        self.grid.heuristic = self.grid.calcHeuristic()
         self.veiculos = veiculos
         self.red_car = veiculos[0]
         self.num_v = num_v
@@ -233,35 +308,37 @@ class SearchNode:
     def next_moves(self):
         for v in self.veiculos:
             if self.can_move(v,1):
-                move1 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, None, None)
+                move1 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, 0, None)
                 if v.orientation == 'Vertical':
-                    if v.length < 3:
-                        #move1.remove(v)
-                        temp = Veiculo(v.id, v.x1, v.y1-1, v.length, v.orientation)
-                        #move1.add(temp)
-                        move1.move_vehicle(v,1)
-                        move1.updateV(temp)
-                        move1.moveFromParent = (v.id, v.x1, v.y1,"w")
-                        yield move1
-                        #print("move:")
-                        #print(move)
+                    #move1.remove(v)
+                    temp = Veiculo(v.id, v.x1, v.y1-1, v.length, v.orientation)
+                    #move1.add(temp)
+                    move1.move_vehicle(v,1)
+                    move1.updateV(temp)
+                    move1.moveFromParent = (v.id, v.x1, v.y1,"w", bidimensional_array_to_string(self.state), bidimensional_array_to_string(move1.state))
+                    move1.heuristic = move1.calcHeuristic()
+                    yield move1
+                    #print("move:")
+                    #print(move)
                 else:
                     #move1.remove(v)
                     temp = Veiculo(v.id, v.x1+1, v.y1, v.length, v.orientation)
                     #move1.add(temp)
                     move1.move_vehicle(v,1)
                     move1.updateV(temp)
-                    move1.moveFromParent = (v.id, v.x1, v.y1,"d")
+                    move1.moveFromParent = (v.id, v.x1, v.y1,"d", bidimensional_array_to_string(self.state), bidimensional_array_to_string(move1.state))
+                    move1.heuristic = move1.calcHeuristic()
                     yield move1
             if self.can_move(v,-1):
-                move2 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, None, None)
+                move2 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, 0, None)
                 if v.orientation == 'Vertical':
                     #move2.remove(v)
                     temp = Veiculo(v.id, v.x1, v.y1+1, v.length, v.orientation)
                     #move2.add(temp)
                     move2.move_vehicle(v,-1)
                     move2.updateV(temp)
-                    move2.moveFromParent = (v.id, v.x1, v.y1,"s")
+                    move2.moveFromParent = (v.id, v.x1, v.y1,"s", bidimensional_array_to_string(self.state), bidimensional_array_to_string(move2.state))
+                    move2.heuristic = move2.calcHeuristic()
                     yield move2
                 else:
                     #move2.remove(v)
@@ -269,7 +346,11 @@ class SearchNode:
                     #move2.add(temp)
                     move2.move_vehicle(v,-1)
                     move2.updateV(temp)
-                    move2.moveFromParent = (v.id, v.x1, v.y1,"a")
+                    move2.moveFromParent = (v.id, v.x1, v.y1,"a", bidimensional_array_to_string(self.state), bidimensional_array_to_string(move2.state))
+                    if v.id == "A":
+                        move2.heuristic = self.heuristic
+                    else:
+                        move2.heuristic = move2.calcHeuristic() 
                     yield move2
     
     def calcHeuristic(self):
@@ -279,13 +360,13 @@ class SearchNode:
         blocking_blockers = []
 
         for x in range(self.veiculos[0].x2 + 1, 6):
-            if goal_row[x] != 'o' and goal_row[x] not in blocking_goal:
+            if goal_row[x] != 'o' and goal_row[x] != 'x' and goal_row[x] not in blocking_goal:
                 blocking_goal.append((goal_row[x],x))
 
         for i in range(len(blocking_goal)):
             x = blocking_goal[i][1]
             for y in range(0,6):
-                if self.state[y][x] != 'o' and self.state[y][x] not in blocking_goal and self.state[y][x] not in blocking_blockers:
+                if self.state[y][x] != 'o' and self.state[y][x] != 'x' and self.state[y][x] not in blocking_goal and self.state[y][x] not in blocking_blockers:
                     blocking_blockers.append(self.state[y][x])
 
         return distance_to_goal + len(blocking_goal) + len(blocking_blockers)  
@@ -303,7 +384,7 @@ class SearchTree:
         self.open_nodes = [self.root]
         self.closed_nodes = []
         self.solution = None
-    
+        self.t0 = time.process_time()
     def get_moves(self, node): 
         if node.depth == 0:
             return []
@@ -311,7 +392,7 @@ class SearchTree:
         moves += [node.moveFromParent]
         return moves
 
-    def search(self, limit = 18):
+    def search(self):
         while self.open_nodes != []:
             #print("OPEN-------------------NODES")
             #print(self.open_nodes)
@@ -319,16 +400,16 @@ class SearchTree:
             self.closed_nodes.append(bidimensional_array_to_string(node.state))
             #print("-----NOVO NODE-----")
             #print(node)
-            if node.goal_test() and node.depth <= limit:
-                print("DONE----------------------------------")
-                print(node.depth)
+            if node.goal_test():
+                #print("DONE----------------------------------")
+                #print(node.depth)
                 self.solution = node
                 print(len(self.closed_nodes))
                 return self.get_moves(node)
             lnewnodes = []
             for child in node.next_moves():
                 if bidimensional_array_to_string(child.state) not in self.closed_nodes:
-                    child.heuristic = child.calcHeuristic()
+                    #child.heuristic = child.calcHeuristic()
                     #print("-----CHILD-----")
                     #print(child)
                     lnewnodes.append(child)
@@ -351,7 +432,6 @@ def bidimensional_array_to_string(barray):
     for j in array:
         string += j
     return string
-    
 
 # DO NOT CHANGE THE LINES BELLOW
 # You can change the default values using the command line, example:

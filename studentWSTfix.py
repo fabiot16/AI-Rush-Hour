@@ -104,13 +104,9 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                             await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                             state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                             move_done = True
-                            while next_moves != [] and next_moves[0][0] == move[0]:
+                            if next_moves != [] and next_moves[0][0] != move[0]:
+                                key=" "
                                 await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-                                state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-                                next_moves.pop()
-                                
-                            key=" "
-                            await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                             
 
                 # Next lines are only for the Human Agent, the key values are nonetheless the correct ones!
@@ -379,6 +375,7 @@ class SearchTree:
             return []
         moves = self.get_moves(node.parent)
         moves += [node.moveFromParent]
+
         return moves
 
     def search(self):

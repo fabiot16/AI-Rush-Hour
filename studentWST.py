@@ -301,6 +301,7 @@ class SearchTree:
         self.problem = problem
         self.root = problem.grid
         self.open_nodes = [self.root]
+        self.open_states = [bidimensional_array_to_string(self.root.state)]
         self.closed_nodes = []
         self.solution = None
     
@@ -324,10 +325,13 @@ class SearchTree:
                 print(node.depth)
                 self.solution = node
                 print(len(self.closed_nodes))
+                print(len(self.open_nodes))
                 return self.get_moves(node)
             lnewnodes = []
             for child in node.next_moves():
-                if bidimensional_array_to_string(child.state) not in self.closed_nodes:
+                state = bidimensional_array_to_string(child.state)
+                if state not in self.closed_nodes and state not in self.open_states:
+                    self.open_states.append(state)
                     child.heuristic = child.calcHeuristic()
                     #print("-----CHILD-----")
                     #print(child)

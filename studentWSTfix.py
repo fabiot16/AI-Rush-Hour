@@ -50,19 +50,22 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                     problem = SearchProblem(generate_info(grid_state))
                     t = SearchTree(problem)
                     next_moves = t.search()
-                    while next_moves == []:
-                        state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                    state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                     print("Time:",time.process_time()-t0)
                     print(next_moves)
-                    
+                    move = next_moves.pop(0)
+                    move_done = False
                 else:
                     while next_moves != []:
+                        
                         state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                         cursor = state.get("cursor")
                         grid_state = state.get("grid")
                         grid_state_edges = grid_state.split()
                         compare = grid_state_edges[1]
-                        move = next_moves.pop(0)
+                        if move_done:
+                            move = next_moves.pop(0)
+                        move_done = False
                         print(move)
                         target = [move[1], move[2]]
                         direction = move[3]
@@ -100,6 +103,7 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                             key = direction
                             await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                             state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                            move_done = True
                             while next_moves != [] and next_moves[0][0] == move[0]:
                                 await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                                 state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server

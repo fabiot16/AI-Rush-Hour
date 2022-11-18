@@ -42,16 +42,22 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
             try:
                 if next_moves == []:
                     state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-                    grid_state = state.get("grid")
+                    grid = state.get("grid")
+                    grid_state = grid.split()
+                    grid_state_parsed = list(grid_state[1])
                     cursor = state.get("cursor")
                     select = state.get("selected")
 
-                    t0 = time.process_time()
-                    problem = SearchProblem(generate_info(grid_state))
+                    
+                    problem = SearchProblem(generate_info(grid_state_parsed))
                     t = SearchTree(problem)
                     next_moves = t.search()
-                    state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-                    print("Time:",time.process_time()-t0)
+                    while next_moves == []:
+                        key = "a"
+                        await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                        state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                            
+                    
                     print(next_moves)
                     move = next_moves.pop(0)
                     move_done = False
@@ -77,19 +83,27 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                                 key = m
                                 await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agent
                                 state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-
-                            grid_state = state.get("grid")
-                            grid_state_edges = grid_state.split()
-                            compare = grid_state_edges[1]
-                            cursor = state.get("cursor")
-                            select = state.get("selected")
-
+                        
+                        grid_state = state.get("grid")
+                        grid_state_edges = grid_state.split()
+                        compare = grid_state_edges[1]
+                        cursor = state.get("cursor")
+                        select = state.get("selected")
+                        
                         if compare != move[4]:
-                            print("Crazy driver")
-                            next_moves = []
                             if select != "":
                                 key=" "
                                 await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                            crazy_moves = get_crazy_moves(move[4],generate_info(move[4])[1], compare, generate_info(compare)[1])
+                            if len(crazy_moves) > 1:
+                                crazy_moves = crazy_moves.reverse()
+                            print(crazy_moves)
+                            
+                            next_moves.insert(0, move)
+                            if crazy_moves != None:
+                                for m in crazy_moves:
+                                    next_moves.insert(0,m)
+                            move = next_moves.pop(0)
                             break
                         
                         if cursor == target and select == "":
@@ -103,7 +117,11 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                             key = direction
                             await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                             state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-                            move_done = True
+                            grid_state = state.get("grid")
+                            grid_state_edges = grid_state.split()
+                            compare = grid_state_edges[1]
+                            if move[5] == compare:
+                                move_done = True
                             if next_moves != [] and next_moves[0][0] != move[0]:
                                 key=" "
                                 await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
@@ -161,11 +179,32 @@ def cursor_to_target(cursor, target):
         y = ""
     return x+y
 
+def get_crazy_moves(previous_grid, previous_vehicles, crazy_grid, crazy_vehicles):
+    moved_vehicles = []
+    moves_to_undo = []
+
+    for i in range(0,len(previous_vehicles)):
+        if (previous_vehicles[i].x1 != crazy_vehicles[i].x1) or (previous_vehicles[i].y1 != crazy_vehicles[i].y1):
+            moved_vehicles.append((previous_vehicles[i],crazy_vehicles[i]))
+
+    for pair in moved_vehicles:
+        if pair[1].x1 > pair[0].x1:
+            move = (pair[1].id, pair[1].x1, pair[1].y1, "a", crazy_grid, previous_grid)
+            moves_to_undo.append(move)
+        elif pair[1].x1 < pair[0].x1:
+            move = (pair[1].id, pair[1].x1, pair[1].y1, "d", crazy_grid, previous_grid)
+            moves_to_undo.append(move)
+        elif pair[1].y1 > pair[0].y1:
+            move = (pair[1].id, pair[1].x1, pair[1].y1, "w", crazy_grid, previous_grid)
+            moves_to_undo.append(move)
+        elif pair[1].y1 < pair[0].y1:
+            move = (pair[1].id, pair[1].x1, pair[1].y1, "s", crazy_grid, previous_grid)
+            moves_to_undo.append(move)
+    
+    return moves_to_undo
+
 def generate_info(grid):
-    grid_state = grid.split()
-    num_v = grid_state[0]
-    grid_state_parsed = list(grid_state[1])
-    bidimensional_grid = [grid_state_parsed[e:e+6] for e in range(0,36,6)]
+    bidimensional_grid = [grid[e:e+6] for e in range(0,36,6)]
     veiculos = []
     veiculos_found = []
 
@@ -175,17 +214,17 @@ def generate_info(grid):
                 if x < 5 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] != 'x' and (bidimensional_grid[y][x] == bidimensional_grid[y][x+1]) and bidimensional_grid[y][x] not in veiculos_found:
                     veiculos_found.append(bidimensional_grid[y][x])
                     orientation = 'Horizontal'
-                    length = grid_state_parsed.count(bidimensional_grid[y][x])
+                    length = grid.count(bidimensional_grid[y][x])
                     veiculos.append(Veiculo(bidimensional_grid[y][x], x, y, length, orientation))
 
                 elif x < 6 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] != 'x' and bidimensional_grid[y][x] not in veiculos_found:
                     veiculos_found.append(bidimensional_grid[y][x])
                     orientation = 'Vertical'
-                    length = grid_state_parsed.count(bidimensional_grid[y][x])
+                    length = grid.count(bidimensional_grid[y][x])
                     veiculos.append(Veiculo(bidimensional_grid[y][x], x, y, length, orientation))
     
     veiculos.sort(key = lambda v: v.id)
-    return [bidimensional_grid, num_v, veiculos]
+    return [bidimensional_grid, veiculos]
 
 class Veiculo:
     def __init__(self, identification, x1, y1, length, orientation):
@@ -219,12 +258,11 @@ class Veiculo:
 
 class SearchProblem:
     def __init__(self, info):
-        grid, num_v, veiculos = info
+        grid, veiculos = info
         self.grid = SearchNode(grid, None, veiculos, 0, None, None)
         self.grid.heuristic = self.grid.calcHeuristic()
         self.veiculos = veiculos
         self.red_car = veiculos[0]
-        self.num_v = num_v
 
 class SearchNode:
     def __init__(self, state, parent, veiculos, depth, heuristic, moveFromParent):

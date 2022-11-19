@@ -86,7 +86,7 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                         compare = grid_state_edges[1]
                         select = state.get("selected")
                         
-                        if compare != move[4]: # check if crazy driver happened, sensitive to crazy car timming, frezes in some situations
+                        if move[4] is not None and compare != move[4]: # check if crazy driver happened, sensitive to crazy car timming, frezes in some situations
                             print(move[4])
                             print(compare)
                             print("Crazy Driver")
@@ -117,7 +117,7 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                         grid_state_edges = grid_state.split()
                         compare = grid_state_edges[1]
 
-                        if move[4] != compare:
+                        if move[4] is not None and move[4] != compare:
                             break
 
                         key = direction
@@ -204,22 +204,22 @@ def get_crazy_moves(previous_grid, previous_vehicles, crazy_grid, crazy_vehicles
 
     for pair in moved_vehicles:
         if pair[1].x1 > pair[0].x1:
-            move = (pair[1].id, pair[1].x1, pair[1].y1, "a", crazy_grid, previous_grid)
+            move = (pair[1].id, pair[1].x1, pair[1].y1, "a", None, previous_grid)
             moves_to_undo.append(move)
             print("move")
             print(move)
         elif pair[1].x1 < pair[0].x1:
-            move = (pair[1].id, pair[1].x1, pair[1].y1, "d", crazy_grid, previous_grid)
+            move = (pair[1].id, pair[1].x1, pair[1].y1, "d", None, previous_grid)
             moves_to_undo.append(move)
             print("move")
             print(move)
         elif pair[1].y1 > pair[0].y1:
-            move = (pair[1].id, pair[1].x1, pair[1].y1, "w", crazy_grid, previous_grid)
+            move = (pair[1].id, pair[1].x1, pair[1].y1, "w", None, previous_grid)
             moves_to_undo.append(move)
             print("move")
             print(move)
         elif pair[1].y1 < pair[0].y1:
-            move = (pair[1].id, pair[1].x1, pair[1].y1, "s", crazy_grid, previous_grid)
+            move = (pair[1].id, pair[1].x1, pair[1].y1, "s", None, previous_grid)
             moves_to_undo.append(move)
             print("move")
             print(move)

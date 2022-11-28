@@ -1,4 +1,3 @@
-# Sensitive to crazy car timming
 """Example client."""
 import asyncio
 from calendar import c
@@ -30,6 +29,7 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
         SPRITES = pygame.image.load("data/pad.png").convert_alpha()
         SCREEN.blit(SPRITES, (0, 0))
         
+        level = 0
         target=""
         direction=""
         key = ""
@@ -46,18 +46,18 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                     grid = state.get("grid")
                     grid_state = grid.split()
                     grid_state_parsed = list(grid_state[1])
-                    
-                    problem = SearchProblem(generate_info(grid_state_parsed))
-                    t = SearchTree(problem)
-                    next_moves = t.search()
-                    while next_moves == []:
-                        key = "a"
-                        await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-                        state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                    if grid_state[0] != level:
+                        level = grid_state[0]
+                        print("Level: ",level)
+                        problem = SearchProblem(generate_info(grid_state_parsed))
+                        t = SearchTree(problem)
+                        next_moves = t.search()
+                        print(next_moves)
+                        print(len(next_moves)," moves")
 
-                    print(next_moves)
-                    move = next_moves.pop(0)
-                    move_done = False
+                        state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                        move = next_moves.pop(0)
+                        move_done = False
 
                 else:
                     while next_moves != []:
@@ -68,10 +68,9 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                         if move_done:
                             move = next_moves.pop(0)
                             move_done = False
-
-                        print(move)
-                        target = [move[1], move[2]]
-                        direction = move[3]
+                        print("Next move: ", move)
+                        target = move[1]
+                        direction = move[2]
 
                         if cursor != target:
                             cursor_moves = list(cursor_to_target(cursor,target))
@@ -86,24 +85,22 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                         compare = grid_state_edges[1]
                         select = state.get("selected")
                         
-                        if move[4] is not None and compare != move[4]: # check if crazy driver happened, sensitive to crazy car timming, frezes in some situations
-                            print(move[4])
-                            print(compare)
+                        if move[3] is not None and compare != move[3]: # check if crazy driver happened
                             print("Crazy Driver")
                             if select != "":
                                 key=" "
                                 await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-                            crazy_moves = get_crazy_moves(move[4],generate_info(move[4])[1], compare, generate_info(compare)[1])
+                            crazy_moves = get_crazy_moves(move[3],generate_info(move[3])[1], compare, generate_info(compare)[1])
                             if len(crazy_moves) > 1:
                                 crazy_moves.reverse()
-                            print("CRAZY MOVES-------------------------------------")
-                            print(crazy_moves)
+                            #print("CRAZY MOVES-------------------------------------")
+                            #print(crazy_moves)
                             next_moves.insert(0, move)
                             if crazy_moves != None:
                                 for m in crazy_moves:
                                     next_moves.insert(0,m)
-                            print("NEXT_MOVES -----------------------------------------")
-                            print(next_moves)
+                            #print("NEXT_MOVES -----------------------------------------")
+                            #print(next_moves)
                             move = next_moves.pop(0)
                             break
                         
@@ -117,7 +114,10 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                         grid_state_edges = grid_state.split()
                         compare = grid_state_edges[1]
 
-                        if move[4] is not None and move[4] != compare:
+                        if move[3] is not None and move[3] != compare:
+                            if select != "":
+                                key=" "
+                                await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                             break
 
                         key = direction
@@ -186,45 +186,29 @@ def get_crazy_moves(previous_grid, previous_vehicles, crazy_grid, crazy_vehicles
     moved_vehicles = []
     moves_to_undo = []
 
-    print("previous_grid")
-    print(previous_grid)
-    print("crazy_grid")
-    print(crazy_grid)
-    print("previous_vegicles")
-    print(previous_vehicles)
-    print("crazy_vehicles")
-    print(crazy_vehicles)
-
     for i in range(0,len(previous_vehicles)):
         if (previous_vehicles[i].x1 != crazy_vehicles[i].x1) or (previous_vehicles[i].y1 != crazy_vehicles[i].y1):
             moved_vehicles.append((previous_vehicles[i],crazy_vehicles[i]))
-    
-    print("moved_vehicles")
-    print(moved_vehicles)
 
     for pair in moved_vehicles:
         if pair[1].x1 > pair[0].x1:
-            move = (pair[1].id, pair[1].x1, pair[1].y1, "a", None, previous_grid)
+            move = (pair[1].id, [pair[1].x1, pair[1].y1], "a", None)
             moves_to_undo.append(move)
-            print("move")
-            print(move)
+
         elif pair[1].x1 < pair[0].x1:
-            move = (pair[1].id, pair[1].x1, pair[1].y1, "d", None, previous_grid)
+            move = (pair[1].id, [pair[1].x1, pair[1].y1], "d", None)
             moves_to_undo.append(move)
-            print("move")
-            print(move)
+            
         elif pair[1].y1 > pair[0].y1:
-            move = (pair[1].id, pair[1].x1, pair[1].y1, "w", None, previous_grid)
+            move = (pair[1].id, [pair[1].x1, pair[1].y1], "w", None)
             moves_to_undo.append(move)
-            print("move")
-            print(move)
+           
         elif pair[1].y1 < pair[0].y1:
-            move = (pair[1].id, pair[1].x1, pair[1].y1, "s", None, previous_grid)
+            move = (pair[1].id, [pair[1].x1, pair[1].y1], "s", None)
             moves_to_undo.append(move)
-            print("move")
-            print(move)
+            
     
-        print("moves_to_undo")
+        print("Moves to undo")
         print(moves_to_undo)
     return moves_to_undo
 
@@ -264,15 +248,10 @@ class Veiculo:
             self.x2 = self.x1
             self.y2 = self.y1 + self.length-1
 
-            for i in range(self.y1,self.y2+1):
-                self.points.append([self.x1,i])
-
         else:
             self.x2 = self.x1 + self.length-1
             self.y2 = self.y1
-
-            for i in range(self.x1,self.x2+1):
-                self.points.append([i,self.y2])
+            
         return None
 
     def __str__(self):
@@ -300,19 +279,6 @@ class SearchNode:
     
     def goal_test(self):
         return self.veiculos[0].x2 == 5
-
-    def add(self, v):
-        for p in v.points:
-            x,y = p
-            self.state[y][x] = v.id
-        
-        return None
-
-    def remove(self, v):
-        for p in v.points:
-            x,y = p
-            self.state[y][x] = 'o'
-        return None
 
     def updateV(self, v):
         for i in range(0, len(self.veiculos)):
@@ -357,43 +323,33 @@ class SearchNode:
             if self.can_move(v,1):
                 move1 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, 0, None)
                 if v.orientation == 'Vertical':
-                    #move1.remove(v)
                     temp = Veiculo(v.id, v.x1, v.y1-1, v.length, v.orientation)
-                    #move1.add(temp)
                     move1.move_vehicle(v,1)
                     move1.updateV(temp)
-                    move1.moveFromParent = (v.id, v.x1, v.y1,"w", bidimensional_array_to_string(self.state), bidimensional_array_to_string(move1.state))
+                    move1.moveFromParent = (v.id, "w")
                     move1.heuristic = move1.calcHeuristic()
                     yield move1
-                    #print("move:")
-                    #print(move)
                 else:
-                    #move1.remove(v)
                     temp = Veiculo(v.id, v.x1+1, v.y1, v.length, v.orientation)
-                    #move1.add(temp)
                     move1.move_vehicle(v,1)
                     move1.updateV(temp)
-                    move1.moveFromParent = (v.id, v.x1, v.y1,"d", bidimensional_array_to_string(self.state), bidimensional_array_to_string(move1.state))
+                    move1.moveFromParent = (v.id, "d")
                     move1.heuristic = move1.calcHeuristic()
                     yield move1
             if self.can_move(v,-1):
                 move2 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, 0, None)
                 if v.orientation == 'Vertical':
-                    #move2.remove(v)
                     temp = Veiculo(v.id, v.x1, v.y1+1, v.length, v.orientation)
-                    #move2.add(temp)
                     move2.move_vehicle(v,-1)
                     move2.updateV(temp)
-                    move2.moveFromParent = (v.id, v.x1, v.y1,"s", bidimensional_array_to_string(self.state), bidimensional_array_to_string(move2.state))
+                    move2.moveFromParent = (v.id, "s")
                     move2.heuristic = move2.calcHeuristic()
                     yield move2
                 else:
-                    #move2.remove(v)
                     temp = Veiculo(v.id, v.x1-1, v.y1, v.length, v.orientation)
-                    #move2.add(temp)
                     move2.move_vehicle(v,-1)
                     move2.updateV(temp)
-                    move2.moveFromParent = (v.id, v.x1, v.y1,"a", bidimensional_array_to_string(self.state), bidimensional_array_to_string(move2.state))
+                    move2.moveFromParent = (v.id, "a")
                     if v.id == "A":
                         move2.heuristic = self.heuristic
                     else:
@@ -404,19 +360,36 @@ class SearchNode:
         goal_row = self.state[2]
         distance_to_goal = 5 - self.veiculos[0].x2
         blocking_goal = []
-        blocking_blockers = []
+        top = 0
+        bottom = 0
 
         for x in range(self.veiculos[0].x2 + 1, 6):
-            if goal_row[x] != 'o' and goal_row[x] != 'x' and goal_row[x] not in blocking_goal:
+            if goal_row[x] != 'x' and goal_row[x] not in blocking_goal:
                 blocking_goal.append((goal_row[x],x))
 
         for i in range(len(blocking_goal)):
-            x = blocking_goal[i][1]
+            v, x = blocking_goal[i]
+            column = []
+            top = 0
+            bottom = 0
             for y in range(0,6):
-                if self.state[y][x] != 'o' and self.state[y][x] != 'x' and self.state[y][x] not in blocking_goal and self.state[y][x] not in blocking_blockers:
-                    blocking_blockers.append(self.state[y][x])
+                column.append(self.state[y][x])
+            y = 0
+            while column[y] != v:
+                if column[y] != 'o' and column[y] != 'x':
+                    top += 1
+                else:
+                    top = 0
+                y += 1
+            y = 5
+            while column [y] != v:
+                if column[y] != 'o' and column[y] != 'x':
+                    bottom += 1
+                else:
+                    bottom = 0
+                y -= 1
 
-        return distance_to_goal + len(blocking_goal) + len(blocking_blockers)  
+        return distance_to_goal + len(blocking_goal) + min(top, bottom)  
     
     def __str__(self):
         return "State:\n " + str(self.state) + "\nRed Car: " + str(self.veiculos[0]) + "\nVeiculos: " + str(self.veiculos) + "\nDepth: " + str(self.depth) + "\nHeuristic: " + str(self.heuristic) + "\nMove from parent: " + str(self.moveFromParent)
@@ -430,47 +403,41 @@ class SearchTree:
         self.root = problem.grid
         self.open_nodes = [self.root]
         self.open_states = [bidimensional_array_to_string(self.root.state)]
-        self.closed_nodes = []
         self.solution = None
         self.t0 = time.process_time()
     def get_moves(self, node): 
         if node.depth == 0:
             return []
         moves = self.get_moves(node.parent)
-        moves += [node.moveFromParent]
+        car = node.moveFromParent[0]
+        index = None
+        for v in node.parent.veiculos:
+            if v.id == car:
+                index = node.parent.veiculos.index(v)
+        coord = [node.parent.veiculos[index].x1,node.parent.veiculos[index].y1]
+        state = bidimensional_array_to_string(node.parent.state)
+        move = (car, coord, node.moveFromParent[1], state)
+        moves.append(move) 
 
         return moves
 
     def search(self):
         while self.open_nodes != []:
-            #print("OPEN-------------------NODES")
-            #print(self.open_nodes)
             node = self.open_nodes.pop(0)
-            self.closed_nodes.append(bidimensional_array_to_string(node.state))
-            #print("-----NOVO NODE-----")
-            #print(node)
             if node.goal_test():
-                #print("DONE----------------------------------")
-                #print(node.depth)
+                print("Time: ", time.process_time()-self.t0)
                 self.solution = node
                 return self.get_moves(node)
             lnewnodes = []
             for child in node.next_moves():
                 state = bidimensional_array_to_string(child.state)
-                if state not in self.closed_nodes and state not in self.open_states:
+                if state not in self.open_states:
                     self.open_states.append(state)
-                    child.heuristic = child.calcHeuristic()
-                    #print("-----CHILD-----")
-                    #print(child)
                     lnewnodes.append(child)
-                    #print("lnewnoode::::::::.")
-                    #print(lnewnodes)
             self.add_to_open(lnewnodes)
         return None
 
     def add_to_open(self,lnewnodes):
-        #print("on open")
-        #print(lnewnodes)
         self.open_nodes.extend(lnewnodes)
         self.open_nodes.sort(key = lambda node: node.heuristic + node.depth)
     

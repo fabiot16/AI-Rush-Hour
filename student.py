@@ -3,9 +3,7 @@ import asyncio
 from calendar import c
 import getpass
 import json
-from math import comb
 import os
-import copy
 import time
 
 # Next 4 lines are not needed for AI agents, please remove them from your code!
@@ -123,6 +121,11 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                         key = direction
                         await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                         state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
+                        grid_state = state.get("grid")
+                        grid_state_edges = grid_state.split()
+                        compare = grid_state_edges[1]
+                        if next_moves == [] and move[4] is not None and move[4] != compare:
+                            break
                         move_done = True
 
                         if next_moves != [] and next_moves[0][0] != move[0]:
@@ -187,24 +190,24 @@ def get_crazy_moves(previous_grid, previous_vehicles, crazy_grid, crazy_vehicles
     moves_to_undo = []
 
     for i in range(0,len(previous_vehicles)):
-        if (previous_vehicles[i].x1 != crazy_vehicles[i].x1) or (previous_vehicles[i].y1 != crazy_vehicles[i].y1):
+        if (previous_vehicles[i][1] != crazy_vehicles[i][1]) or (previous_vehicles[i][2] != crazy_vehicles[i][2]):
             moved_vehicles.append((previous_vehicles[i],crazy_vehicles[i]))
 
     for pair in moved_vehicles:
-        if pair[1].x1 > pair[0].x1:
-            move = (pair[1].id, [pair[1].x1, pair[1].y1], "a", None)
+        if pair[1][1] > pair[0][1]:
+            move = (pair[1][0], [pair[1][1], pair[1][2]], "a", None, None)
             moves_to_undo.append(move)
 
-        elif pair[1].x1 < pair[0].x1:
-            move = (pair[1].id, [pair[1].x1, pair[1].y1], "d", None)
+        elif pair[1][1] < pair[0][1]:
+            move = (pair[1][0], [pair[1][1], pair[1][2]], "d", None, None)
             moves_to_undo.append(move)
             
-        elif pair[1].y1 > pair[0].y1:
-            move = (pair[1].id, [pair[1].x1, pair[1].y1], "w", None)
+        elif pair[1][2] > pair[0][2]:
+            move = (pair[1][0], [pair[1][1], pair[1][2]], "w", None, None)
             moves_to_undo.append(move)
            
-        elif pair[1].y1 < pair[0].y1:
-            move = (pair[1].id, [pair[1].x1, pair[1].y1], "s", None)
+        elif pair[1][2] < pair[0][2]:
+            move = (pair[1][0], [pair[1][1], pair[1][2]], "s", None, None)
             moves_to_undo.append(move)
             
     
@@ -224,41 +227,16 @@ def generate_info(grid):
                     veiculos_found.append(bidimensional_grid[y][x])
                     orientation = 'Horizontal'
                     length = grid.count(bidimensional_grid[y][x])
-                    veiculos.append(Veiculo(bidimensional_grid[y][x], x, y, length, orientation))
+                    veiculos.append([bidimensional_grid[y][x], x, y, length, orientation])
 
                 elif x < 6 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] != 'x' and bidimensional_grid[y][x] not in veiculos_found:
                     veiculos_found.append(bidimensional_grid[y][x])
                     orientation = 'Vertical'
                     length = grid.count(bidimensional_grid[y][x])
-                    veiculos.append(Veiculo(bidimensional_grid[y][x], x, y, length, orientation))
+                    veiculos.append([bidimensional_grid[y][x], x, y, length, orientation])
     
-    veiculos.sort(key = lambda v: v.id)
+    veiculos.sort(key = lambda v: v[0])
     return [bidimensional_grid, veiculos]
-
-class Veiculo:
-    def __init__(self, identification, x1, y1, length, orientation):
-        self.id = identification
-        self.x1 = x1
-        self.y1 = y1
-        self.length = length
-        self.orientation = orientation
-        self.points = []
-
-        if orientation == "Vertical":
-            self.x2 = self.x1
-            self.y2 = self.y1 + self.length-1
-
-        else:
-            self.x2 = self.x1 + self.length-1
-            self.y2 = self.y1
-            
-        return None
-
-    def __str__(self):
-        return "[" + str(self.id) + " - " + "(" + str(self.x1) + "," + str(self.y1) + ") " + "(" + str(self.x2) + "," + str(self.y2) + ")" + ", " + str(self.length) + ", " + str(self.orientation) + "]"
-    
-    def __repr__(self):
-        return str(self)
 
 class SearchProblem:
     def __init__(self, info):
@@ -266,7 +244,6 @@ class SearchProblem:
         self.grid = SearchNode(grid, None, veiculos, 0, None, None)
         self.grid.heuristic = self.grid.calcHeuristic()
         self.veiculos = veiculos
-        self.red_car = veiculos[0]
 
 class SearchNode:
     def __init__(self, state, parent, veiculos, depth, heuristic, moveFromParent):
@@ -278,92 +255,88 @@ class SearchNode:
         self.moveFromParent = moveFromParent # (id, w or a or s or d)
     
     def goal_test(self):
-        return self.veiculos[0].x2 == 5
-
-    def updateV(self, v):
-        for i in range(0, len(self.veiculos)):
-            if self.veiculos[i].id == v.id:
-                self.veiculos[i] = v
-                break
-            
-        return None
+        return self.veiculos[0][1] + self.veiculos[0][3] - 1 == 5
 
     def move_vehicle(self, v, direction):
-        if v.orientation == "Vertical":
+        v_id, v_x, v_y, v_length, v_orientation = v
+        v_x2 = v_x + v_length-1
+        v_y2 = v_y + v_length-1
+        index = self.veiculos.index(v)
+        if v_orientation == "Vertical":
             if direction > 0:
-                self.state[v.y2][v.x1] = 'o'
-                self.state[v.y1-1][v.x1] = v.id
+                self.state[v_y2][v_x] = 'o'
+                self.state[v_y-1][v_x] = v_id
+                self.veiculos[index][2] -= 1
             else:
-                self.state[v.y1][v.x1] = 'o'
-                self.state[v.y2+1][v.x1] = v.id
+                self.state[v_y][v_x] = 'o'
+                self.state[v_y2+1][v_x] = v_id
+                self.veiculos[index][2] += 1
         else:
             if direction > 0:
-                self.state[v.y1][v.x1] = 'o'
-                self.state[v.y2][v.x2+1] = v.id
+                self.state[v_y][v_x] = 'o'
+                self.state[v_y][v_x2+1] = v_id
+                self.veiculos[index][1] += 1
             else:
-                self.state[v.y2][v.x2] = 'o'
-                self.state[v.y1][v.x1-1] = v.id
+                self.state[v_y][v_x2] = 'o'
+                self.state[v_y][v_x-1] = v_id
+                self.veiculos[index][1] -= 1
         return None
     
     def can_move(self, v, direction):
-        if v.orientation == "Vertical":
-            if direction > 0 and v.y1 > 0 and self.state[v.y1-1][v.x1] == 'o':
+        v_id, v_x, v_y, v_length, v_orientation = v
+        v_x2 = v_x + v_length-1
+        v_y2 = v_y + v_length-1
+        if v_orientation == "Vertical":
+            if direction > 0 and v_y > 0 and self.state[v_y-1][v_x] == 'o':
                 return True
-            elif direction < 0 and v.y2 < 5 and self.state[v.y2+1][v.x1] == 'o':
+            elif direction < 0 and v_y2 < 5 and self.state[v_y2+1][v_x] == 'o':
                 return True
         else:
-            if direction > 0 and v.x2 < 5 and self.state[v.y1][v.x2+1] == 'o':
+            if direction > 0 and v_x2 < 5 and self.state[v_y][v_x2+1] == 'o':
                 return True
-            elif direction < 0 and v.x1 > 0 and self.state[v.y1][v.x1-1] == 'o':
+            elif direction < 0 and v_x > 0 and self.state[v_y][v_x-1] == 'o':
                 return True
         return False
 
     def next_moves(self):
         for v in self.veiculos:
             if self.can_move(v,1):
-                move1 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, 0, None)
-                if v.orientation == 'Vertical':
-                    temp = Veiculo(v.id, v.x1, v.y1-1, v.length, v.orientation)
-                    move1.move_vehicle(v,1)
-                    move1.updateV(temp)
-                    move1.moveFromParent = (v.id, "w")
-                    move1.heuristic = move1.calcHeuristic()
-                    yield move1
+                move = SearchNode([list(x) for x in self.state],self,[list(x) for x in self.veiculos],self.depth+1, 0, None)
+                if v[4] == 'Vertical':
+                    move.move_vehicle(v,1)
+                    move.moveFromParent = (v[0], "w")
+                    move.heuristic = move.calcHeuristic()
+                    yield move
                 else:
-                    temp = Veiculo(v.id, v.x1+1, v.y1, v.length, v.orientation)
-                    move1.move_vehicle(v,1)
-                    move1.updateV(temp)
-                    move1.moveFromParent = (v.id, "d")
-                    move1.heuristic = move1.calcHeuristic()
-                    yield move1
+                    move.move_vehicle(v,1)
+                    move.moveFromParent = (v[0], "d")
+                    move.heuristic = move.calcHeuristic()
+                    yield move
             if self.can_move(v,-1):
-                move2 = SearchNode(copy.deepcopy(self.state),self,copy.deepcopy(self.veiculos),self.depth+1, 0, None)
-                if v.orientation == 'Vertical':
-                    temp = Veiculo(v.id, v.x1, v.y1+1, v.length, v.orientation)
-                    move2.move_vehicle(v,-1)
-                    move2.updateV(temp)
-                    move2.moveFromParent = (v.id, "s")
-                    move2.heuristic = move2.calcHeuristic()
-                    yield move2
+                move = SearchNode([list(x) for x in self.state],self,[list(x) for x in self.veiculos],self.depth+1, 0, None)
+                if v[4] == 'Vertical':
+                    move.move_vehicle(v,-1)
+                    move.moveFromParent = (v[0], "s")
+                    move.heuristic = move.calcHeuristic()
+                    yield move
                 else:
-                    temp = Veiculo(v.id, v.x1-1, v.y1, v.length, v.orientation)
-                    move2.move_vehicle(v,-1)
-                    move2.updateV(temp)
-                    move2.moveFromParent = (v.id, "a")
-                    if v.id == "A":
-                        move2.heuristic = self.heuristic
+                    move.move_vehicle(v,-1)
+                    move.moveFromParent = (v[0], "a")
+                    if v[0] == "A":
+                        move.heuristic = self.heuristic
                     else:
-                        move2.heuristic = move2.calcHeuristic() 
-                    yield move2
+                        move.heuristic = move.calcHeuristic() 
+                    yield move
     
     def calcHeuristic(self):
         goal_row = self.state[2]
-        distance_to_goal = 5 - self.veiculos[0].x2
+        red_car = self.veiculos[0]
+        distance_to_goal = 5 - (red_car[1] + red_car[3])
         blocking_goal = []
         top = 0
         bottom = 0
 
-        for x in range(self.veiculos[0].x2 + 1, 6):
+        for x in range(red_car[1] + red_car[3] + 1, 6):
             if goal_row[x] != 'x' and goal_row[x] not in blocking_goal:
                 blocking_goal.append((goal_row[x],x))
 
@@ -405,6 +378,7 @@ class SearchTree:
         self.open_states = [bidimensional_array_to_string(self.root.state)]
         self.solution = None
         self.t0 = time.process_time()
+
     def get_moves(self, node): 
         if node.depth == 0:
             return []
@@ -412,11 +386,12 @@ class SearchTree:
         car = node.moveFromParent[0]
         index = None
         for v in node.parent.veiculos:
-            if v.id == car:
+            if v[0] == car:
                 index = node.parent.veiculos.index(v)
-        coord = [node.parent.veiculos[index].x1,node.parent.veiculos[index].y1]
+        coord = [node.parent.veiculos[index][1],node.parent.veiculos[index][2]]
         state = bidimensional_array_to_string(node.parent.state)
-        move = (car, coord, node.moveFromParent[1], state)
+        after_state = bidimensional_array_to_string(node.state)
+        move = (car, coord, node.moveFromParent[1], state, after_state)
         moves.append(move) 
 
         return moves

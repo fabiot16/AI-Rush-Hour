@@ -1,5 +1,4 @@
 """Example client."""
-from ast import Break
 import asyncio
 from calendar import c
 import getpass
@@ -29,6 +28,8 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
         SCREEN.blit(SPRITES, (0, 0))
         
         level = 0
+        global size
+        global goal_line
         target=""
         direction=""
         key = ""
@@ -43,11 +44,21 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                 if next_moves == []:
                     state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                     grid = state.get("grid")
+                    size = state.get("dimensions")[0]
+                    
+                    if size == 4:
+                        goal_line = 2
+                    elif size == 6:
+                        goal_line = 2
+                    else:
+                        goal_line = 4
+
                     grid_state = grid.split()
                     grid_state_parsed = list(grid_state[1])
                     if grid_state[0] != level:
                         level = grid_state[0]
                         print("Level: ",level)
+                        print("Size: ", size)
                         problem = SearchProblem(generate_info(grid_state_parsed))
                         t = SearchTree(problem)
                         next_moves = t.search()
@@ -92,14 +103,10 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                             crazy_moves = get_crazy_moves(move[3],generate_info(move[3])[1], compare, generate_info(compare)[1])
                             if len(crazy_moves) > 1:
                                 crazy_moves.reverse()
-                            #print("CRAZY MOVES-------------------------------------")
-                            #print(crazy_moves)
                             next_moves.insert(0, move)
                             if crazy_moves != None:
                                 for m in crazy_moves:
                                     next_moves.insert(0,m)
-                            #print("NEXT_MOVES -----------------------------------------")
-                            #print(next_moves)
                             move = next_moves.pop(0)
                             break
                         
@@ -122,11 +129,6 @@ async def agent_loop(server_address="localhost:8000", agent_name="student"):
                         key = direction
                         await websocket.send(json.dumps({"cmd": "key", "key": key}))  # send key command to server - you must implement this send in the AI agentstate = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
                         state = json.loads(await websocket.recv())  # receive game update, this must be called timely or your game will get out of sync with the server
-                        grid_state = state.get("grid")
-                        grid_state_edges = grid_state.split()
-                        compare = grid_state_edges[1]
-                        if next_moves == [] and move[4] is not None and move[4] != compare:
-                            break
                         move_done = True
 
                         if next_moves != [] and next_moves[0][0] != move[0]:
@@ -217,25 +219,24 @@ def get_crazy_moves(previous_grid, previous_vehicles, crazy_grid, crazy_vehicles
     return moves_to_undo
 
 def generate_info(grid):
-    bidimensional_grid = [grid[e:e+6] for e in range(0,36,6)]
+    bidimensional_grid = [grid[e:e+size] for e in range(0,size*size,size)]
     veiculos = []
     veiculos_found = []
 
-    for y in range(0,6):
-        if bidimensional_grid[y].count('o') != 6:
-            for x in range(0,6):
-                if x < 5 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] != 'x' and (bidimensional_grid[y][x] == bidimensional_grid[y][x+1]) and bidimensional_grid[y][x] not in veiculos_found:
+    for y in range(0,size):
+        if bidimensional_grid[y].count('o') != size:
+            for x in range(0,size):
+                if x < size-1 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] != 'x' and (bidimensional_grid[y][x] == bidimensional_grid[y][x+1]) and bidimensional_grid[y][x] not in veiculos_found:
                     veiculos_found.append(bidimensional_grid[y][x])
                     orientation = 'Horizontal'
                     length = grid.count(bidimensional_grid[y][x])
                     veiculos.append([bidimensional_grid[y][x], x, y, length, orientation])
 
-                elif x < 6 and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] != 'x' and bidimensional_grid[y][x] not in veiculos_found:
+                elif x < size and bidimensional_grid[y][x] != 'o' and bidimensional_grid[y][x] != 'x' and bidimensional_grid[y][x] not in veiculos_found:
                     veiculos_found.append(bidimensional_grid[y][x])
                     orientation = 'Vertical'
                     length = grid.count(bidimensional_grid[y][x])
                     veiculos.append([bidimensional_grid[y][x], x, y, length, orientation])
-    
     veiculos.sort(key = lambda v: v[0])
     return [bidimensional_grid, veiculos]
 
@@ -243,6 +244,7 @@ class SearchProblem:
     def __init__(self, info):
         grid, veiculos = info
         self.grid = SearchNode(grid, None, veiculos, 0, None, None)
+        self.size = size
         self.grid.heuristic = self.grid.calcHeuristic()
         self.veiculos = veiculos
 
@@ -256,7 +258,7 @@ class SearchNode:
         self.moveFromParent = moveFromParent # (id, w or a or s or d)
     
     def goal_test(self):
-        return self.veiculos[0][1] + self.veiculos[0][3] - 1 == 5
+        return self.veiculos[0][1] + self.veiculos[0][3] - 1 == size - 1
 
     def move_vehicle(self, v, direction):
         v_id, v_x, v_y, v_length, v_orientation = v
@@ -290,10 +292,10 @@ class SearchNode:
         if v_orientation == "Vertical":
             if direction > 0 and v_y > 0 and self.state[v_y-1][v_x] == 'o':
                 return True
-            elif direction < 0 and v_y2 < 5 and self.state[v_y2+1][v_x] == 'o':
+            elif direction < 0 and v_y2 < size - 1 and self.state[v_y2+1][v_x] == 'o':
                 return True
         else:
-            if direction > 0 and v_x2 < 5 and self.state[v_y][v_x2+1] == 'o':
+            if direction > 0 and v_x2 < size - 1 and self.state[v_y][v_x2+1] == 'o':
                 return True
             elif direction < 0 and v_x > 0 and self.state[v_y][v_x-1] == 'o':
                 return True
@@ -330,40 +332,47 @@ class SearchNode:
                     yield move
     
     def calcHeuristic(self):
-        goal_row = self.state[2]
+        goal_row = self.state[goal_line]
         red_car = self.veiculos[0]
-        distance_to_goal = 5 - (red_car[1] + red_car[3])
+        distance_to_goal = size - 1 - (red_car[1] + red_car[3])
         blocking_goal = []
-        top = 0
-        bottom = 0
+        top = None
+        bottom = None
 
-        for x in range(red_car[1] + red_car[3] + 1, 6):
+        for x in range(red_car[1] + red_car[3], size):
             if goal_row[x] != 'x' and goal_row[x] not in blocking_goal:
                 blocking_goal.append((goal_row[x],x))
+        
+        if blocking_goal == []:
+            top = 0
+            bottom = 0
 
         for i in range(len(blocking_goal)):
             v, x = blocking_goal[i]
             column = []
             top = 0
             bottom = 0
-            for y in range(0,6):
+            for y in range(0,size):
                 column.append(self.state[y][x])
             y = 0
-            while column[y] != v:
-                if column[y] != 'o' and column[y] != 'x':
-                    top += 1
-                else:
-                    top = 0
-                y += 1
-            y = 5
-            while column [y] != v:
-                if column[y] != 'o' and column[y] != 'x':
-                    bottom += 1
-                else:
-                    bottom = 0
-                y -= 1
-
-        return distance_to_goal + len(blocking_goal) + min(top, bottom)  
+            if column[y] != v:
+                top = 0
+                while column[y] != v:
+                    if column[y] != 'o' and column[y] != 'x':
+                        top += 1
+                    else:
+                        top = 0
+                    y += 1
+            y = size - 1
+            if column[y] != v:
+                bottom = 0
+                while column [y] != v:
+                    if column[y] != 'o' and column[y] != 'x':
+                        bottom += 1
+                    else:
+                        bottom = 0
+                    y -= 1
+        return distance_to_goal + len(blocking_goal) + min(value for value in [top, bottom] if value is not None)  
     
     def __str__(self):
         return "State:\n " + str(self.state) + "\nRed Car: " + str(self.veiculos[0]) + "\nVeiculos: " + str(self.veiculos) + "\nDepth: " + str(self.depth) + "\nHeuristic: " + str(self.heuristic) + "\nMove from parent: " + str(self.moveFromParent)
@@ -379,6 +388,7 @@ class SearchTree:
         self.open_states = [bidimensional_array_to_string(self.root.state)]
         self.solution = None
         self.t0 = time.process_time()
+
 
     def get_moves(self, node): 
         if node.depth == 0:
